@@ -1,0 +1,361 @@
+<head>
+  <style type='text/css'>
+    #text {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 200px;
+      height: auto;
+      border: 1px solid #000;
+    }
+
+    #param {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 250px;
+      height: auto;
+      border: 1px solid #000;
+      color: #000;
+    }
+
+    #main {
+      border: 1px solid #4EDE6D;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- <div id='text'>
+    Virus Spreading<br />
+  </div> -->
+</body>
+<!-- <script src="https://cdn.bootcss.com/three.js/102/three.min.js"></script> -->
+<script src="/static/js/three.min.js"></script>
+
+<!-- <script src="http://storygame.top/resources/js/OrbitControls.js"></script> -->
+<script src="/static/js/OrbitControls.js"></script>
+
+<!-- <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script> -->
+<script src="/static/js/jquery.min.js"></script>
+
+<script src="/static/js/virusGame.js"></script>
+
+
+<script type="text/javascript">
+
+</script>
+<script type='text/javascript'>
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+  var container;
+  var camera, scene, raycaster, renderer;
+  var virusList = [];
+  var timeNext = new Date().getTime(),
+    timeNow, timeInterval = 500;
+  var lockTarget;
+  var mouse = new THREE.Vector2(),
+    selected;
+  var radius = 100,
+    theta = 0;
+  var attackerList = []; // 发起攻击并维护弹道的病毒列表
+  var FONT, ParticleTexture;
+
+  let handleFontLoading = new Promise((resolve, reject) => {
+    var loader = new THREE.FontLoader();
+    loader.load('/static/font/optimer_bold.typeface.json', function(font) {
+      FONT = font;
+      resolve(FONT);
+    });
+    ParticleTexture = new THREE.TextureLoader().load("/static/image/rain.png");
+  });
+  $(document).ready(function() {
+    handleFontLoading.then((res) => {
+      init();
+      animate();
+    })
+  });
+
+
+
+  function init() {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 250, 1400);
+
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set(400, 200, 200); //设置相机位置
+    camera.lookAt(scene.position); //设置相机方向(指向的场景对象)
+
+    // 添加平行光光线
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(1, 1, 1).normalize();
+    scene.add(light);
+
+    var light2 = new THREE.DirectionalLight(0xffffff, 1);
+    light2.position.set(-1, -1, -1).normalize();
+    scene.add(light2);
+
+    // var axisHelper = new THREE.AxisHelper(1000);
+    // scene.add(axisHelper);
+
+
+    var spriteMaterial = new THREE.SpriteMaterial({
+      rotation: 0, //旋转精灵对象45度，弧度值
+      map: ParticleTexture, //设置精灵纹理贴图
+    });
+
+    function generateVirus(safe) {
+      let radius = 20;
+      var minDis = radius * radius * 3;
+      // 给玩家1一个初始病毒
+      let player1 = new Virus('player', 1, [0, 0, 0], {
+        reproduce: 1,
+        category: 1,
+        reproduceSize: 120,
+        reproduceFactor: 2,
+        speedFactor: 2,
+        defendFactor: 1,
+        scene: scene,
+        font: FONT,
+        sprite: spriteMaterial,
+      });
+      virusList.push(player1);
+
+      // 给电脑一个初始病毒
+      let computer1 = new Virus('computer1', 1, [200, 200, 100], {
+        reproduce: 1,
+        category: 2,
+        reproduceSize: 120,
+        reproduceFactor: 2,
+        speedFactor: 2,
+        defendFactor: 1,
+        scene: scene,
+        font: FONT,
+        sprite: spriteMaterial,
+      });
+      virusList.push(computer1);
+
+      // 渲染病毒
+      for (let i = 0; i < 10; i++) {
+        let id = 'Virus_' + i;
+        let type = 1;
+        let location = [Math.random() * 333 - 166, Math.random() * 333 - 166, Math.random() * 333 - 166];
+        let option = {
+          radius: radius,
+          reproduce: parseInt(Math.random() * 5),
+          category: 0,
+          reproduceFactor: 1,
+          reproduceSize: 90,
+          speedFactor: 1,
+          defendFactor: 1,
+          scene: scene,
+          font: FONT,
+          sprite: spriteMaterial,
+        }
+        let virus = new Virus(id, type, location, option);
+
+        // little adjust location
+        for (let e of virusList) {
+          if (e.distance(virus) < minDis) {
+            let newLoc = [location[0] - 60, location[1] - 60, 20];
+            virus.updateLocation(newLoc);
+          }
+        }
+        virusList.push(virus);
+      }
+      // 碰撞检测
+      let regenerate = false;
+      for (let i = 0; i < virusList.length; i++) {
+        let crash = false;
+        for (let j = i + 1; j < virusList.length; j++) {
+          if (virusList[i].distance(virusList[j]) < minDis) {
+            crash = true;
+            // console.log(i, j, '碰撞', virusList[i].location, virusList[j].location, virusList[i].distance(virusList[j]))
+            break;
+          }
+        }
+        if (crash) {
+          regenerate = true;
+          break;
+        }
+      }
+      if (regenerate && safe < 100) {
+        // 清除所有病毒 重新生成
+        for (let virus of virusList) {
+          virus.removeView();
+        }
+        virusList = [];
+        generateVirus(safe + 1);
+      }
+    }
+    generateVirus(0)
+
+
+    // var plane = new THREE.Mesh(
+    //   new THREE.PlaneBufferGeometry(10000, 10000),
+    //   new THREE.MeshBasicMaterial({
+    //     color: 0xffffff,
+    //     opacity: 0.5,
+    //     transparent: true
+    //   });
+    // );
+    // plane.position.y = 100;
+    // plane.rotation.x = -Math.PI / 2;
+    // scene.add(plane);
+
+
+    raycaster = new THREE.Raycaster();
+
+    renderer = new THREE.WebGLRenderer();
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera);
+
+    document.addEventListener('mousemove', onDocumentMouseMove, false);
+    document.addEventListener('click', virusAttack, false);
+    window.addEventListener('resize', onWindowResize, false);
+
+  }
+
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function onDocumentMouseMove(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  }
+
+  function virusAttack(event) {
+    if (selected == undefined) {
+      // 点击空白
+      if (lockTarget != undefined) {
+        // 解锁目标
+        console.log('解锁目标', lockTarget.name);
+        if (lockTarget.material.emissive) {
+          lockTarget.material.emissive.setHex(lockTarget.currentHex);
+        }
+        lockTarget = null;
+      }
+    } else if (lockTarget == undefined) {
+      // 只能锁定己方目标
+      if (selected.name == 'player') {
+        lockTarget = Object.assign({}, selected);
+        console.log('锁定目标', lockTarget.name);
+
+        // 锁定
+        lockTarget.material.emissive.setHex(0x1572E6);
+      }
+    } else if (lockTarget.name == selected.name) {
+      //解锁
+      console.log('解锁目标', lockTarget.name);
+      lockTarget.material.emissive.setHex(lockTarget.currentHex);
+      lockTarget = null;
+    } else if (lockTarget.name != selected.name) {
+      //进攻
+      console.log(lockTarget.name, '进攻', selected.name);
+      let virusAttacker, virusDefender;
+      for (let each of virusList) {
+        if (each.mesh.name == lockTarget.name) {
+          virusAttacker = each;
+        }
+        if (each.mesh.name == selected.name) {
+          virusDefender = each;
+        }
+      }
+      let attackParams = virusAttacker.attack(virusDefender);
+      attackerList.push(attackParams);
+    }
+  }
+
+
+  function animate() {
+    requestAnimationFrame(animate);
+    render();
+  }
+
+  function render() {
+    // theta += 0.5;
+    // camera.position.x = radius * Math.sin(degToRad(theta));
+    // camera.position.y = radius * Math.sin(degToRad(theta));
+    // camera.position.z = radius * Math.cos(degToRad(theta));
+    // camera.lookAt(scene.position);
+    // camera.updateMatrixWorld();
+    // find intersections
+
+    timeNow = new Date().getTime();
+    // 执行固定时间间隔的操作
+    if (timeNow - timeNext > timeInterval) {
+      // 病毒繁殖
+      for (let v of virusList) {
+        v.selfReproduce();
+      }
+
+      //弹道轨迹
+      for (let listIndex in attackerList) {
+        let attackParams = attackerList[listIndex];
+        let attackRes = attackParams.attacker.attackTarget(attackParams.spriteGroup, attackParams.target, attackParams.attackNum, attackParams.category, attackParams.attackPoints);
+        if (attackRes) {
+          attackerList.splice(listIndex, 1);
+        }
+      }
+
+      timeNext = timeNow;
+    }
+
+
+    raycaster.setFromCamera(mouse, camera);
+    var intersects = raycaster.intersectObjects(scene.children);
+    if (intersects.length > 0) {
+      if (selected != intersects[0].object) {
+        if (selected) {
+          if (selected.material.emissive) {
+            selected.material.emissive.setHex(selected.currentHex);
+          }
+        }
+        selected = intersects[0].object;
+        // console.log('经过:', selected.name);
+        if (selected.material.emissive) {
+          // 染色,高亮标注
+          if (lockTarget) {
+            if (lockTarget.name == selected.name) {
+              //已经锁定,不再染色
+            } else {
+              selected.currentHex = selected.material.emissive.getHex();
+              selected.material.emissive.setHex(0xED5331);
+            }
+          } else {
+            selected.currentHex = selected.material.emissive.getHex();
+            selected.material.emissive.setHex(0xED5331);
+          }
+        }
+      }
+    } else {
+      if (selected) {
+        if (selected.material.emissive) {
+          if (lockTarget) {
+            if (selected.name !== lockTarget.name) {
+              // 撤去高亮标注
+              selected.material.emissive.setHex(selected.currentHex);
+            }
+          } else {
+            // 撤去高亮标注
+            selected.material.emissive.setHex(selected.currentHex);
+          }
+
+        }
+      };
+      selected = null;
+    }
+    renderer.render(scene, camera);
+  }
+</script>
