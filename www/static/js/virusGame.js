@@ -283,3 +283,78 @@ var playerColor = {
   '2': 0xDE9A5B,
   '3': 0x57D783
 };
+/**
+ * [RobotAttack 执行AI进攻策略]
+ * @param {[array]} virusList [病毒列表]
+ * @param {[num]} selfid [robot的id]
+ * @param {[num]} difficulty [AI的难度]
+ */
+const RobotAttack = function(virusList, selfid, difficulty, attackerList) {
+  let ownList = [];
+  let idleList = [];
+  let enemyList = [];
+  for (let virus of virusList) {
+    if (virus.category == selfid) {
+      ownList.push(virus);
+    } else if (virus.category == 0) {
+      idleList.push(virus);
+    } else if (virus.category != selfid) {
+      enemyList.push(virus);
+    }
+  }
+  if (ownList.length == 0) {
+    // 已经输了
+    return;
+  }
+  const attackTargetList = [];
+  // 计算自己可调用病毒数值
+  let maxVirus = ownList[0];
+  let maxRemain = 0;
+  const ownNum = [];
+  for (let v of ownList) {
+    let attackNum = parseInt(v.reproduce / 2);
+    if (attackNum > maxRemain) {
+      maxRemain = attackNum;
+      maxVirus = v;
+    }
+    ownNum.push(attackNum);
+  }
+
+  // 检查有没有能占领的病毒
+  const generateAttackPlan = function(l) {
+    for (let v of l) {
+      if (v.reproduce == 0) {
+        // 选择最多的己方病毒占领
+        attackTargetList.push([maxVirus, v]);
+      } else {
+        for (let i = 0; i < ownNum.length; i++) {
+          if (v.reproduce * v.defendFactor < ownNum[i]) {
+            // 可以占领,就不选最优的去占了, 选最优的去占也可能被攻击,失去最优点
+            attackTargetList.push([ownList[i], v]);
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (idleList.length != 0) {
+    generateAttackPlan(idleList);
+  }
+  if (enemyList.length != 0) {
+    generateAttackPlan(enemyList);
+  }
+
+  // 排列攻击计划优先级
+  attackTargetList.sort((a, b) => {
+    let weightA = a[0].speedFactor * 0.2 + a[1].reproduceFactor * 0.5 + a[1].reproduceSize / 100 * 0.3 + (-0.5) * a[0].distance(a[1]);
+    let weightB = b[0].speedFactor * 0.2 + b[1].reproduceFactor * 0.5 + b[1].reproduceSize / 100 * 0.3 + (-0.5) * b[0].distance(b[1]);
+    return -(weightA - weightB);
+  });
+
+  for (let i = 0; i < difficulty && i < attackTargetList.length; i++) {
+    let attacker = attackTargetList[i][0];
+    let target = attackTargetList[i][1];
+    let attackParams = attacker.attack(target);
+    attackerList.push(attackParams);
+  }
+}

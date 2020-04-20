@@ -127,7 +127,7 @@
       virusList.push(player1);
 
       // 给电脑一个初始病毒
-      let computer1 = new Virus('computer1', 1, [200, 200, 100], {
+      let computer1 = new Virus('computer1', 1, [Math.random() * 333 - 166, Math.random() * 333 - 166, Math.random() * 333 - 166], {
         reproduce: 1,
         category: 2,
         reproduceSize: 120,
@@ -175,7 +175,6 @@
         for (let j = i + 1; j < virusList.length; j++) {
           if (virusList[i].distance(virusList[j]) < minDis) {
             crash = true;
-            // console.log(i, j, '碰撞', virusList[i].location, virusList[j].location, virusList[i].distance(virusList[j]))
             break;
           }
         }
@@ -279,6 +278,8 @@
       }
       let attackParams = virusAttacker.attack(virusDefender);
       attackerList.push(attackParams);
+      // 玩家执行一次进攻操作后,调用一次robot操作
+      RobotAttack(virusList, 2, 1, attackerList);
     }
   }
 
