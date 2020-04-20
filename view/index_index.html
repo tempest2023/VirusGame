@@ -248,10 +248,15 @@
       }
     } else if (lockTarget == undefined) {
       // 只能锁定己方目标
-      if (selected.name == 'player') {
+      let nowVirus;
+      for (let v of virusList) {
+        if (v.mesh.name == selected.name) {
+          nowVirus = v;
+        }
+      }
+      if (nowVirus.category == 1) {
         lockTarget = Object.assign({}, selected);
         console.log('锁定目标', lockTarget.name);
-
         // 锁定
         lockTarget.material.emissive.setHex(0x1572E6);
       }
