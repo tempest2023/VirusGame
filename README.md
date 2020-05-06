@@ -1,3 +1,6 @@
+A game about virus. Use your virus to occupy other viruses to get victory.
+
+
 
 Application created by [ThinkJS](http://www.thinkjs.org)
 
